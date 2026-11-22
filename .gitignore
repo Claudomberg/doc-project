@@ -1,0 +1,81 @@
+# Ambiente Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Banco de dados e arquivos temporarios
+dados_ceuma/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.tmp
+/Microsoft/Windows/PowerShell/ModuleAnalysisCache
+
+# Documentos e relatorios
+pdf/
+*.pdf
+*.csv
+raio_x_leitura/
+/main/Leitor.json
+/main/imagem_pb_diagnostico.png
+
+# Arquivos de configuracao sensiveis
+.env
+.env.*
+
+# Configuracoes locais e credenciais
+credentials.json
+secrets.json
+*.pem
+*.p12
+*.pfx
+*.key
+
+# Documentos pessoais, imagens digitalizadas e planilhas
+documentos_pessoais/
+relatorios/
+*.doc
+*.docx
+*.odt
+*.xls
+*.xlsx
+*.ods
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+*.bmp
+*.webp
+
+# Modelos, caches e arquivos gerados
+.paddlex/
+.paddleocr/
+modelos_ocr/
+official_models/
+tessdata/
+*.traineddata
+*.pdiparams
+*.pdmodel
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.npz
+*.zip
+*.7z
+*.log
+temp/
+tmp/
+temporarios/
