@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ceuma"
+version = "0.1.0"
+description = "Leitura e conferência local de documentos em PDF."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "PyMuPDF",
+]
+
+[project.optional-dependencies]
+paddle = ["paddlepaddle", "paddleocr"]
+dev = ["pytest", "pillow"]
+
+[project.scripts]
+ceuma = "ceuma.interface.janela_principal:executar"
+ceuma-demo = "ceuma.demo:executar"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["teste_*.py"]
+pythonpath = ["src", "tests"]
+addopts = "-p no:cacheprovider"

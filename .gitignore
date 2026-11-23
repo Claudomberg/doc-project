@@ -2,6 +2,9 @@
 .venv/
 venv/
 __pycache__/
+*.egg-info/
+build/
+dist/
 *.pyc
 .pytest_cache/
 
@@ -27,8 +30,6 @@ pdf/
 *.pdf
 *.csv
 raio_x_leitura/
-/main/Leitor.json
-/main/imagem_pb_diagnostico.png
 
 # Arquivos de configuracao sensiveis
 .env
@@ -43,8 +44,8 @@ secrets.json
 *.key
 
 # Documentos pessoais, imagens digitalizadas e planilhas
-documentos_pessoais/
-relatorios/
+/documentos_pessoais/
+/relatorios/
 *.doc
 *.docx
 *.odt
