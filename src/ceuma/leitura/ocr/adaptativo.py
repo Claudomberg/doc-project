@@ -28,10 +28,23 @@ def _valido(rotulo, valor):
     return validar_data(valor)
 
 
+def _fora_das_linhas(novas, existentes):
+    def sobreposta(a, b):
+        largura = min(a[2], b[2]) - max(a[0], b[0])
+        altura = min(a[3], b[3]) - max(a[1], b[1])
+        return largura > 0 and altura > 0 and largura * altura >= 0.2 * (a[2] - a[0]) * (a[3] - a[1])
+
+    return [
+        nova for nova in novas
+        if len(nova["texto"].strip()) >= 2
+        and not any(sobreposta(nova["caixa"], linha["caixa"]) for linha in existentes)
+    ]
+
+
 class LeitorAdaptativo:
     def __init__(self, *, tesseract=None, paddle=None, orientacao="paddle", orientador=None,
-                 segundos_pagina=15, segundos_documento=60, max_tentativas=4,
-                 permitir_paddle=False, reserva_paddle=35, corrigir=True):
+                 segundos_pagina=15, segundos_documento=60, max_tentativas=6,
+                 permitir_paddle=False, reserva_paddle=35, corrigir=True, leitura_esparsa=True):
         if orientacao not in {"paddle", "osd", "pdf"}:
             raise ValueError("Modo de orientação inválido.")
         self.tesseract = tesseract or Tesseract()
@@ -45,6 +58,7 @@ class LeitorAdaptativo:
         self.permitir_paddle = permitir_paddle
         self.reserva_paddle = reserva_paddle
         self.corrigir = corrigir
+        self.leitura_esparsa = leitura_esparsa
         if (max_tentativas < 1 or not all(math.isfinite(x) and x > 0 for x in
                                          (segundos_pagina, segundos_documento, reserva_paddle))):
             raise ValueError("Orçamento OCR inválido.")
@@ -247,6 +261,11 @@ class LeitorAdaptativo:
                 linhas = self._leve(imagem, 11)
             if not linhas:
                 linhas = self._pesado(imagem)
+        elif (self.corrigir and self.leitura_esparsa and self._psm(imagem) == 3
+              and self.tentativas < self.max_tentativas):
+            # A análise de layout trata rótulos miúdos e isolados ("GERAL", "EXPEDIÇÃO") e números
+            # em tinta colorida como desenho; a leitura esparsa os recupera nas áreas que ficaram vazias.
+            linhas = [*linhas, *_fora_das_linhas(self._leve(imagem, 11), linhas)]
         if not linhas:
             self.pendencias.add("SEM_TEXTO_UTIL")
         if self.corrigir:

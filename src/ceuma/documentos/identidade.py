@@ -472,7 +472,7 @@ _PERFIS_IDENTIDADE = {
         outros=("REGISTRO GERAL CPF",), orgaos={"ORGAO_EMISSOR": "UF_EMISSAO"},
         normalizar=(_normalizar_cin if cin else
                     lambda texto: _ROTULO_REGISTRO_CPF.sub("REGISTRO GERAL CPF", texto)),
-        cpf_contextual=cin, nao_aplicaveis=("RG",) if cin else (),
+        cpf_contextual=True, nao_aplicaveis=("RG",) if cin else (),
         orgao_avulso="ORGAO_EMISSOR",
     )
     for tipo, cin in (("DOCUMENTO_IDENTIDADE", False), ("CIN", True))

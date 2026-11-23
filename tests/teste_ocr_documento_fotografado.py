@@ -7,7 +7,7 @@ import pymupdf
 from ceuma.documentos.identificador import identificar_documento
 from ceuma.leitura.ocr.adaptativo import LeitorAdaptativo
 from ceuma.leitura.ocr.tesseract import Tesseract, _tsv
-from teste_extracao_identidade import analisar, linha
+from teste_extracao_identidade import _CPF, analisar, linha
 
 _HEADER = b"level\tblock_num\tpar_num\tline_num\tleft\ttop\twidth\theight\tconf\ttext\n"
 
@@ -48,6 +48,20 @@ class TesteLeitorAdaptativoEmFotos(unittest.TestCase):
         self.assertEqual(LeitorAdaptativo._psm(np.zeros((3508, 2480, 3))), 3)
         self.assertEqual(LeitorAdaptativo._psm(np.zeros((1485, 3300, 3))), 3)
         self.assertEqual(LeitorAdaptativo._psm(np.zeros((90, 900, 3))), 7)
+
+    def test_leitura_esparsa_completa_areas_vazias_da_leitura_de_layout(self):
+        def linha(texto, x):
+            return {"texto": texto, "caixa": [x, 10, x + 80, 30], "confianca": .95}
+
+        tess = Mock()
+        tess.reconhecer.side_effect = [
+            [linha("NOME TITULAR FICTICIO", 0)],
+            [linha("NOME", 0), linha("EXPEDICAO", 300), linha("A", 500)],
+        ]
+        motor = LeitorAdaptativo(tesseract=tess, corrigir=True)
+        dados = motor.reconhecer(np.zeros((1200, 1600, 3), dtype=np.uint8))
+        self.assertEqual([c.args[1] for c in tess.reconhecer.call_args_list], [3, 11])
+        self.assertEqual([l["texto"] for l in dados["linhas"]], ["NOME TITULAR FICTICIO", "EXPEDICAO"])
 
     def test_prazo_recomeca_a_cada_documento(self):
         relogio = [100.0]
@@ -90,6 +104,21 @@ class TesteIdentificacaoDeRgFotografado(unittest.TestCase):
         ])["campos"]["identidade"]
         self.assertEqual(campos["DATA_NASCIMENTO"]["valor"], "01/01/2000")
         self.assertEqual(campos["NATURALIDADE"]["valor"], "CIDADE FICTICIA")
+
+
+class TesteCpfDoRgTradicional(unittest.TestCase):
+    def test_cpf_rotulado_com_contexto_do_titular_e_confirmado(self):
+        resultado = analisar(f"CARTEIRA DE IDENTIDADE\nREGISTRO GERAL: 12345678\nNOME: TITULAR FICTICIO\nCPF: {_CPF}")
+        self.assertEqual(resultado["campos"]["identidade"]["CPF"]["status"], "ENCONTRADO")
+        cpf, = resultado["campos"]["cpfs"]
+        self.assertEqual(cpf["papel"], "TITULAR")
+
+    def test_cpf_no_bloco_de_filiacao_continua_sem_titularidade(self):
+        resultado = analisar(
+            f"CARTEIRA DE IDENTIDADE\nREGISTRO GERAL: 12345678\nNOME: TITULAR FICTICIO\n"
+            f"FILIACAO: PESSOA FICTICIA\nCPF: {_CPF}"
+        )
+        self.assertEqual(resultado["campos"]["identidade"]["CPF"]["status"], "EVIDENCIA_INSUFICIENTE")
 
 
 if __name__ == "__main__":

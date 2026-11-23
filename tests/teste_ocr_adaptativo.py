@@ -89,7 +89,7 @@ class TesteAdaptativo(unittest.TestCase):
         tess = Mock()
         from teste_analise_familiar import cpf_sintetico
         tess.reconhecer.side_effect = [[linha], [{**linha, "confianca": .95, "texto": "CPF: " + cpf_sintetico(1)}]]
-        motor = LeitorAdaptativo(tesseract=tess)
+        motor = LeitorAdaptativo(tesseract=tess, leitura_esparsa=False)
         dados = motor.reconhecer(self.img)
         self.assertEqual(tess.reconhecer.call_args.args[1], 7)
         self.assertEqual(dados["linhas"], [linha])
@@ -101,7 +101,7 @@ class TesteAdaptativo(unittest.TestCase):
         recuperada = {**linha, "texto": "CPF DO TITULAR: " + cpf_sintetico(1)}
         tess = Mock()
         tess.reconhecer.side_effect = [[linha], [recuperada], [recuperada]]
-        motor = LeitorAdaptativo(tesseract=tess)
+        motor = LeitorAdaptativo(tesseract=tess, leitura_esparsa=False)
         dados = motor.reconhecer(self.img)
         self.assertEqual(dados["texto"], recuperada["texto"])
         self.assertEqual(dados["linhas"][0]["caixa"], [7, 7, 97, 22])
@@ -117,7 +117,7 @@ class TesteAdaptativo(unittest.TestCase):
                 "CATEGORIA: B", "DATA DE NASCIMENTO: 01/01/2000",
             ), 10)
         ]
-        motor = LeitorAdaptativo(tesseract=tess, paddle=paddle)
+        motor = LeitorAdaptativo(tesseract=tess, paddle=paddle, leitura_esparsa=False)
         self.assertEqual(motor.classificar_orientacao(self.img), [(0, .85)])
         motor.reconhecer(self.img)
         tess.reconhecer.assert_called_once()

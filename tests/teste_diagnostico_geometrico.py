@@ -73,7 +73,10 @@ class TesteDiagnosticoGeometrico(unittest.TestCase):
             ([80, 20, 180, 30], "PAR_SELECIONADO"),
             ([81, 20, 181, 30], "SOBREPOSICAO_HORIZONTAL_INSUFICIENTE"),
             ([105, 0, 205, 10], "PAR_SELECIONADO"),
-            ([0, 9, 100, 19], "SOBREPOSICAO_VERTICAL"),
+            # Até 30% de cruzamento vale como valor logo abaixo de um rótulo miúdo.
+            ([0, 6, 100, 16], "SOBREPOSICAO_VERTICAL"),
+            ([0, 8, 100, 18], "PAR_SELECIONADO"),
+            ([0, 9, 100, 19], "PAR_SELECIONADO"),
             ([0, 10, 100, 20], "PAR_SELECIONADO"),
         )
         for campo, rotulo, valor in (("RG", "RG", "00000000"),

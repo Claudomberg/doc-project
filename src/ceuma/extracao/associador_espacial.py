@@ -209,6 +209,10 @@ def _associar_rotulo_valor(linhas_ocr, rotulos, padrao_valor,
                                   distancia_horizontal=espaco_horizontal,
                                   sobreposicao_vertical=sobreposicao_vertical)
                 continue
+            # Rótulos miúdos impressos rente ao valor saem do OCR com caixas que se cruzam alguns pixels.
+            folga = 0.3 * min(caixa_rotulo[3] - caixa_rotulo[1], caixa[3] - caixa[1])
+            if -folga <= distancia < 0 and caixa[1] > caixa_rotulo[1]:
+                distancia = 0
             if not 0 <= distancia <= distancia_vertical_maxima:
                 if observar is not None:
                     if distancia > distancia_vertical_maxima:
