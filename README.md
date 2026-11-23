@@ -2,6 +2,12 @@
 
 Aplicativo Windows para leitura e conferência local de documentos em PDF. O CEUMA extrai campos, indica divergências e reúne resultados para revisão humana. A análise exige conferência humana e não autentica documentos nem decide elegibilidade.
 
+## Documentação
+
+- [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md): o que o projeto faz, tecnologias, decisões de projeto e o caminho completo de um documento, da entrada à saída.
+- [docs/HISTORICO_DE_CORRECOES.md](docs/HISTORICO_DE_CORRECOES.md): problemas encontrados, como foram investigados e o efeito medido de cada correção.
+- [docs/OCR.md](docs/OCR.md): opções de execução do OCR.
+
 ## Funcionalidades
 
 - Leitura híbrida que prioriza texto digital e aplica OCR a páginas ou regiões digitalizadas.
