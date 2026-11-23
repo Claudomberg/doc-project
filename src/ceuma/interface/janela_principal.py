@@ -2,6 +2,7 @@
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
+from tkinter import font as tkfont
 from contextlib import closing
 from pathlib import Path
 from threading import Lock, Thread
@@ -80,7 +81,8 @@ class JanelaPrincipal:
         painel = ttk.Frame(self.root, padding=16)
         painel.pack(fill="both", expand=True)
         titulo = "CEUMA | Demonstração sintética" if self.demonstracao else "CEUMA | Análise Documental"
-        ttk.Label(painel, text=titulo, font=("Segoe UI", 20, "bold")).pack(anchor="w")
+        familia = tkfont.nametofont("TkDefaultFont").actual("family")
+        ttk.Label(painel, text=titulo, font=(familia, 20, "bold")).pack(anchor="w")
 
         acoes = ttk.Frame(painel)
         acoes.pack(fill="x", pady=10)
@@ -142,7 +144,7 @@ class JanelaPrincipal:
             state="disabled",
         )
         self.botao_ocr_avancado.pack(side="left")
-        self.log = scrolledtext.ScrolledText(rodape, height=5, state="disabled", font=("Segoe UI", 10))
+        self.log = scrolledtext.ScrolledText(rodape, height=5, state="disabled", font=(familia, 10))
         self.log.pack(fill="x", padx=6, pady=6)
         self.root.protocol("WM_DELETE_WINDOW", self._solicitar_fechamento)
 

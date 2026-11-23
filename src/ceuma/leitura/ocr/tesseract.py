@@ -46,11 +46,23 @@ def _tsv(saida):
     ]
 
 
+def localizar_tesseract():
+    if configurado := os.environ.get("CEUMA_TESSERACT"):
+        return Path(configurado)
+    if os.name == "nt":
+        padroes = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR" / "tesseract.exe"]
+    else:
+        # Apps abertos pelo Finder não herdam o PATH do Homebrew.
+        padroes = [Path("/opt/homebrew/bin/tesseract"), Path("/usr/local/bin/tesseract"),
+                   Path("/usr/bin/tesseract")]
+    instalado = next((caminho for caminho in padroes if caminho.is_file()), None)
+    no_path = shutil.which("tesseract")
+    return instalado or (Path(no_path) if no_path else padroes[0])
+
+
 class Tesseract:
     def __init__(self, executavel=None):
-        padrao = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR" / "tesseract.exe"
-        caminho = executavel or (padrao if padrao.is_file() else shutil.which("tesseract.exe")) or padrao
-        self.executavel = Path(caminho).absolute()
+        self.executavel = Path(executavel or localizar_tesseract()).absolute()
 
     def _executar(self, imagem, psm, idioma, timeout, *opcoes):
         if not self.executavel.is_file():
