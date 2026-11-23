@@ -21,9 +21,21 @@ py -3.12 -m venv .venv
 
 Em uma máquina offline, prepare previamente um diretório de wheels compatíveis com a versão e a arquitetura do Python. Instale a partir dele com `--no-index --find-links`. Use o mesmo procedimento para as dependências transitivas.
 
+## Preparação no macOS
+
+Use Python 3.12 com Tkinter. Com [uv](https://docs.astral.sh/uv/) e [Homebrew](https://brew.sh), na raiz do projeto:
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -e ".[dev]"
+brew install tesseract tesseract-lang
+```
+
+Para executar, troque `.\.venv\Scripts\python.exe` por `.venv/bin/python` nos comandos abaixo. Variáveis de ambiente usam `export NOME=valor` em vez de `$env:NOME = 'valor'`.
+
 ### OCR local
 
-Instale previamente o Tesseract para Windows com `por.traineddata`. O CEUMA procura o executável na instalação padrão do Windows ou no `PATH`. Verifique a lista de idiomas com `tesseract --list-langs`. O idioma `osd` é necessário apenas ao selecionar o modo experimental de orientação do Tesseract.
+Instale previamente o Tesseract com o idioma português (`por.traineddata`). O CEUMA procura o executável na instalação padrão do sistema (`C:\Program Files\Tesseract-OCR` no Windows, Homebrew no macOS) ou no `PATH`. Para usar outro executável, defina `CEUMA_TESSERACT` com o caminho completo. Verifique a lista de idiomas com `tesseract --list-langs`. O idioma `osd` é necessário apenas ao selecionar o modo experimental de orientação do Tesseract.
 
 O modo padrão é adaptativo. Sem os modelos Paddle locais, é possível usar apenas a orientação declarada no PDF:
 
