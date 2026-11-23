@@ -30,7 +30,7 @@ def _valido(rotulo, valor):
 
 class LeitorAdaptativo:
     def __init__(self, *, tesseract=None, paddle=None, orientacao="paddle", orientador=None,
-                 segundos_pagina=5, segundos_lote=30, max_tentativas=4,
+                 segundos_pagina=15, segundos_documento=60, max_tentativas=4,
                  permitir_paddle=False, reserva_paddle=35, corrigir=True):
         if orientacao not in {"paddle", "osd", "pdf"}:
             raise ValueError("Modo de orientação inválido.")
@@ -40,15 +40,20 @@ class LeitorAdaptativo:
         self.orientador = orientador
         self._falha_orientacao = False
         self.segundos_pagina = segundos_pagina
-        self.segundos_lote = segundos_lote
+        self.segundos_documento = segundos_documento
         self.max_tentativas = max_tentativas
         self.permitir_paddle = permitir_paddle
         self.reserva_paddle = reserva_paddle
         self.corrigir = corrigir
         if (max_tentativas < 1 or not all(math.isfinite(x) and x > 0 for x in
-                                         (segundos_pagina, segundos_lote, reserva_paddle))):
+                                         (segundos_pagina, segundos_documento, reserva_paddle))):
             raise ValueError("Orçamento OCR inválido.")
-        self.fim_lote = None
+        self.fim_documento = None
+        self.iniciar_pagina()
+
+    def iniciar_documento(self):
+        # O leitor é compartilhado no lote; sem reiniciar, o prazo esgotado zera o OCR dos PDFs seguintes.
+        self.fim_documento = None
         self.iniciar_pagina()
 
     def iniciar_pagina(self):
@@ -60,9 +65,9 @@ class LeitorAdaptativo:
 
     def _restante(self):
         agora = monotonic()
-        if self.fim_lote is None:
-            self.fim_lote = agora + self.segundos_lote
-        return min(self.fim_pagina, self.fim_lote) - agora
+        if self.fim_documento is None:
+            self.fim_documento = agora + self.segundos_documento
+        return min(self.fim_pagina, self.fim_documento) - agora
 
     def pode_rasterizar(self, minimo=0.05):
         if self._restante() < minimo:
@@ -102,7 +107,7 @@ class LeitorAdaptativo:
                 finally:
                     espera = monotonic() - inicio
                     self.fim_pagina += espera
-                    self.fim_lote += espera
+                    self.fim_documento += espera
                     self.metricas["segundos_preparacao_orientacao"] += espera
             inicio_inferencia = monotonic()
             try:
@@ -122,9 +127,10 @@ class LeitorAdaptativo:
     @staticmethod
     def _psm(imagem):
         altura, largura = imagem.shape[:2]
-        if altura <= 55 and largura >= altura * 4:
+        if altura <= 120 and largura >= altura * 4:
             return 7
-        return 3 if altura > 900 and largura >= altura * 1.2 else 6
+        # psm 6 trata a área como um bloco único e mistura colunas, fotos e cartões lado a lado.
+        return 3
 
     def classificar_orientacao(self, imagem):
         if self.orientacao == "pdf" or self._restante() < 0.1:
@@ -290,7 +296,7 @@ def criar_leitor_ocr(*, orientador=None):
     return LeitorAdaptativo(
         orientacao=orientacao, orientador=orientador, corrigir=modo == "adaptativo",
         permitir_paddle=modo == "adaptativo" and os.environ.get("CEUMA_OCR_FALLBACK_PADDLE") == "1",
-        segundos_pagina=float(os.environ.get("CEUMA_OCR_SEGUNDOS_PAGINA", "5")),
-        segundos_lote=float(os.environ.get("CEUMA_OCR_SEGUNDOS_LOTE", "30")),
+        segundos_pagina=float(os.environ.get("CEUMA_OCR_SEGUNDOS_PAGINA", "15")),
+        segundos_documento=float(os.environ.get("CEUMA_OCR_SEGUNDOS_DOCUMENTO", "60")),
         reserva_paddle=float(os.environ.get("CEUMA_OCR_RESERVA_PADDLE", "35")),
     )

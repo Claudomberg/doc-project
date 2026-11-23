@@ -14,6 +14,13 @@ class FalhaOCR(RuntimeError):
     """Falha do adaptador sem mensagens brutas ou conteúdo documental."""
 
 
+# Bordas, brasões e fundos de segurança viram palavras de confiança baixa; o texto impresso
+# fica acima de 50 mesmo em tinta colorida.
+_CONFIANCA_MINIMA_PALAVRA = 40
+# Em alturas de palavra; campos datilografados chegam a 1,3 e colunas ficam acima de 6.
+_VAO_ENTRE_COLUNAS = 3
+
+
 def _tsv(saida):
     try:
         leitor = csv.DictReader(io.StringIO(saida.decode("utf-8")), delimiter="\t", quoting=csv.QUOTE_NONE)
@@ -37,13 +44,31 @@ def _tsv(saida):
             )
     except (ValueError, UnicodeError, csv.Error):
         raise FalhaOCR("TSV_INVALIDO") from None
+    # O vão entre colunas é medido antes do filtro: o buraco deixado por uma palavra
+    # descartada no meio de um campo não pode parecer separação de colunas.
+    trechos = (
+        [p for p in trecho if p[5] * 100 >= _CONFIANCA_MINIMA_PALAVRA]
+        for linha in grupos.values() for trecho in _separar_colunas(linha)
+    )
     return [
         {"texto": " ".join(p[0] for p in palavras), "motor": "TESSERACT",
          "caixa": [min(p[1] for p in palavras), min(p[2] for p in palavras),
                    max(p[3] for p in palavras), max(p[4] for p in palavras)],
          "confianca": min(p[5] for p in palavras)}
-        for palavras in grupos.values()
+        for palavras in trechos if palavras
     ]
+
+
+def _separar_colunas(palavras):
+    # O Tesseract junta numa linha campos de colunas diferentes na mesma altura
+    # ("NATURALIDADE   DATA DE NASCIMENTO"), o que impede associar rótulo e valor pela posição.
+    trechos = [[palavras[0]]]
+    for anterior, atual in zip(palavras, palavras[1:]):
+        altura = max(anterior[4] - anterior[2], atual[4] - atual[2])
+        if atual[1] - anterior[3] > _VAO_ENTRE_COLUNAS * altura:
+            trechos.append([])
+        trechos[-1].append(atual)
+    return trechos
 
 
 def localizar_tesseract():
@@ -68,7 +93,10 @@ class Tesseract:
         if not self.executavel.is_file():
             raise FalhaOCR("TESSERACT_INDISPONIVEL")
         altura, largura = imagem.shape[:2]
-        png = pymupdf.Pixmap(pymupdf.csRGB, largura, altura, imagem.tobytes(), False).tobytes("png")
+        # Em cores o Tesseract binariza mal fundos de segurança. A conversão do MuPDF clareia
+        # verde e vermelho saturados bem mais que a média ponderada, destacando o texto preto.
+        rgb = pymupdf.Pixmap(pymupdf.csRGB, largura, altura, imagem.tobytes(), False)
+        png = pymupdf.Pixmap(pymupdf.csGRAY, rgb).tobytes("png")
         ambiente = {**os.environ, "OMP_THREAD_LIMIT": "2"}
         try:
             retorno = subprocess.run(

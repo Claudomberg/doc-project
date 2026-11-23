@@ -12,8 +12,8 @@ reconhecedor Paddle pesados exigem configuração explícita.
 | CEUMA_OCR_ORIENTACAO | paddle (padrão dos modos leves), osd (Tesseract OSD experimental), pdf (orientação declarada no PDF) |
 | CEUMA_OCR_PREAQUECER | 1 habilita a preparação de orientação ao abrir a janela. Ausente ou 0 mantém a preparação sob demanda. |
 | CEUMA_OCR_FALLBACK_PADDLE | 1 habilita fallback explícito no adaptativo, sujeito ao orçamento. Ausente ou 0 mantém o motor pesado desabilitado. |
-| CEUMA_OCR_SEGUNDOS_PAGINA | Segundos positivos e finitos. Padrão 5. |
-| CEUMA_OCR_SEGUNDOS_LOTE | Segundos positivos e finitos. Padrão 30. |
+| CEUMA_OCR_SEGUNDOS_PAGINA | Segundos positivos e finitos. Padrão 15. |
+| CEUMA_OCR_SEGUNDOS_DOCUMENTO | Segundos positivos e finitos por PDF; o prazo recomeça a cada documento do lote. Padrão 60. |
 | CEUMA_OCR_RESERVA_PADDLE | Segundos positivos e finitos exigidos antes de iniciar inferência pesada. Padrão 35. |
 
 A espera pela preparação é medida separadamente do orçamento de OCR e

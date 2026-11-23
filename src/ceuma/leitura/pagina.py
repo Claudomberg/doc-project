@@ -10,6 +10,8 @@ import pymupdf
 
 # Mantém as distâncias do associador na escala histórica de 2 pixels por ponto.
 _ESCALA_COORDENADAS = 2
+# O OCR recebe ~300 DPI; _converter_linhas devolve as caixas para a escala de coordenadas.
+_ESCALA_OCR = 300 / 72
 _MAX_PIXELS = 5_000_000
 _MAX_LADO = 3600
 _MARGEM_RECORTE = 4
@@ -132,7 +134,7 @@ def _ler_imagem(pagina, area, obter_leitor, orientacoes, *, recorte):
         margem = (-_MARGEM_RECORTE, -_MARGEM_RECORTE, _MARGEM_RECORTE, _MARGEM_RECORTE)
         clip = (area + margem) & pagina.rect
     escala = min(
-        _ESCALA_COORDENADAS, math.sqrt(_MAX_PIXELS / clip.get_area()),
+        _ESCALA_OCR, math.sqrt(_MAX_PIXELS / clip.get_area()),
         _MAX_LADO / max(clip.width, clip.height),
     )
     pix = pagina.get_pixmap(

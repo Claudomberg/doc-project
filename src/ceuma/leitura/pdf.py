@@ -31,6 +31,8 @@ def ler_pdf(caminho_arquivo, usar_ocr=True, *, leitor_ocr=None):
         if documento.needs_pass:
             raise ValueError("PDF protegido por senha.")
 
+        if usar_ocr and isinstance(leitor_ocr, LeitorAdaptativo):
+            leitor_ocr.iniciar_documento()
         for numero, pagina in enumerate(documento, start=1):
             if (usar_ocr and leitor_ocr is None
                     and modo_ocr() != "paddle"):

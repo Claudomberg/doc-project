@@ -19,6 +19,9 @@ from ceuma.leitura.ocr import paddle as leitor_ocr
 from ceuma.leitura import pdf as leitor_pdf
 from ceuma.leitura import pagina as pagina_pdf
 
+_PAGINA_INTEIRA = (pymupdf.Rect(0, 0, 300, 220) * pagina_pdf._ESCALA_OCR).irect
+RASTER_PAGINA_INTEIRA = (_PAGINA_INTEIRA.height, _PAGINA_INTEIRA.width)
+
 
 CORES = {
     (220, 20, 70): "12.345.678-9",
@@ -159,7 +162,7 @@ class TesteLeituraHibrida(unittest.TestCase):
         pagina, = self.ler("digitalizada")["paginas"]
         linha, = pagina["linhas"]
         self.assertEqual((pagina["metodo"], pagina["composicao"]), ("OCR", "DIGITALIZADA"))
-        self.assertEqual(self.ocr.chamadas, [(440, 600)])
+        self.assertEqual(self.ocr.chamadas, [RASTER_PAGINA_INTEIRA])
         self.assertEqual((linha["origem"], linha["confianca"], linha["pagina_origem"]), ("OCR", 0.95, 1))
 
     def test_texto_digital_preserva_a_extracao_ordenada_do_leitor_anterior(self):
@@ -175,7 +178,7 @@ class TesteLeituraHibrida(unittest.TestCase):
         documento = self.ler("rodape")
         pagina, = documento["paginas"]
         self.assertEqual(pagina["metodo"], "HIBRIDO")
-        self.assertLess(self.ocr.chamadas[0][0], 440)
+        self.assertLess(self.ocr.chamadas[0][0], RASTER_PAGINA_INTEIRA[0])
         self.assertEqual(len(self.ocr.chamadas), 1)
         self.assertTrue(pagina["texto"].startswith("CARTEIRA"))
         self.assertTrue(pagina["texto"].endswith("RODAPE DIGITAL FICTICIO"))
@@ -301,13 +304,13 @@ class TesteLeituraHibrida(unittest.TestCase):
 
         def simular(imagem):
             resultado = reconhecer(imagem)
-            return resultado if imagem.shape[:2] == (440, 600) else {"linhas": []}
+            return resultado if imagem.shape[:2] == RASTER_PAGINA_INTEIRA else {"linhas": []}
 
         self.ocr.reconhecer = simular
         pagina, = self.ler("rodape")["paginas"]
         self.assertEqual(pagina["metodo"], "HIBRIDO")
         self.assertEqual(len(self.ocr.chamadas), 2)
-        self.assertEqual(self.ocr.chamadas[-1], (440, 600))
+        self.assertEqual(self.ocr.chamadas[-1], RASTER_PAGINA_INTEIRA)
 
     def test_cache_ausente_produz_erro_local_controlado(self):
         with patch.dict(os.environ, {"PADDLE_PDX_CACHE_HOME": str(self.pasta / "cache-ausente")}):

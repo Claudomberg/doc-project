@@ -57,7 +57,7 @@ class TesteOrientacaoPreparada(unittest.TestCase):
         leve = Mock()
         leve.reconhecer.return_value = []
         with patch("ceuma.leitura.ocr.adaptativo.monotonic", side_effect=lambda: relogio[0]):
-            leitor = LeitorAdaptativo(orientador=orientador, tesseract=leve)
+            leitor = LeitorAdaptativo(orientador=orientador, tesseract=leve, segundos_pagina=5)
             self.assertEqual(leitor.classificar_orientacao(self.imagem), [(90, .98)])
             self.assertEqual(leitor.metricas["segundos_preparacao_orientacao"], 14)
             self.assertEqual(leitor._restante(), 5)

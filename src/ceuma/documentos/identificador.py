@@ -88,7 +88,9 @@ def _titulo_encontrado(candidatos, titulos):
         tamanho = len(esperado)
         for candidato in candidatos:
             restante = candidato[tamanho:]
-            if len(candidato) < tamanho or restante not in subtitulos:
+            # Fragmentos de até 2 caracteres após o título são ruído de bordas e brasões.
+            ruido = all(len(parte) <= 2 for parte in restante)
+            if len(candidato) < tamanho or (restante not in subtitulos and not ruido):
                 continue
             pares = [(a, b) for a, b in zip(candidato, esperado) if a != b]
             if len(pares) <= 2 and all(
@@ -142,7 +144,7 @@ def _avaliar_identidades(candidatos, corpo, rotulos_pessoais):
     evidencias_rg = [
         sinal for sinal in (
             titulo_rg, "ORGAO DE IDENTIFICACAO" if emissor else None,
-            "VALIDADE EM TERRITORIO NACIONAL" if verso_rg else None,
+            "VALIDADE EM TERRITORIO NACIONAL" if verso_rg or validade_nacional else None,
             "REGISTRO GERAL" if numero_rg_distinto or (rotulo_rg and not registro_cpf) else None,
             "CAMPOS DE IDENTIFICACAO" if rotulos_pessoais else None,
         ) if sinal
@@ -160,6 +162,8 @@ def _avaliar_identidades(candidatos, corpo, rotulos_pessoais):
         (titulo_rg and (rotulo_rg or (emissor and rotulos_pessoais)))
         or (emissor and rotulo_rg and not registro_cpf and rotulos_pessoais)
         or verso_rg
+        # Em fotos, "REGISTRO GERAL" e o órgão emissor saem em letra miúda e costumam se perder.
+        or (titulo_rg and validade_nacional and rotulos_pessoais and not registro_cpf)
     )
     cin = bool(
         (titulo_cin and (registro_cpf or tem_cpf or rotulos_pessoais))
