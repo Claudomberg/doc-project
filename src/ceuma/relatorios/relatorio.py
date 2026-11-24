@@ -10,7 +10,7 @@ from ceuma.documentos.ctps_fisica import CAMPOS_CTPS
 from ceuma.documentos.declaracao_vinculo import CAMPOS_DECLARACAO_VINCULO
 from ceuma.conferencia.automatica import CAMPOS_COMPARAVEIS
 from ceuma.extracao.campos import STATUS_CPF_TITULAR
-from ceuma.documentos.identidade import CAMPOS_IDENTIDADE
+from ceuma.documentos.identidade import CAMPOS_CIN, CAMPOS_IDENTIDADE
 from ceuma.banco import conexao as banco
 from ceuma.banco.itens_documentais import projetar_itens_analise
 from ceuma.banco.atribuicoes import agrupar_documentos_elegiveis, listar_documentos_sem_atribuicao
@@ -69,7 +69,7 @@ def recuperar_relatorio(conexao, codigo=None, *, analise_id=None):
 
 
 _CAMPOS_POR_TIPO = {
-    "DOCUMENTO_IDENTIDADE": CAMPOS_IDENTIDADE, "CIN": CAMPOS_IDENTIDADE, "CNH": CAMPOS_CNH,
+    "DOCUMENTO_IDENTIDADE": CAMPOS_IDENTIDADE, "CIN": CAMPOS_CIN, "CNH": CAMPOS_CNH,
     "CERTIDAO_NASCIMENTO": CAMPOS_CERTIDAO, "CTPS_FISICA": CAMPOS_CTPS,
     "CTPS_DIGITAL": CAMPOS_CTPS_DIGITAL,
     "SOLICITACAO_CTPS": CAMPOS_SOLICITACAO_CTPS,

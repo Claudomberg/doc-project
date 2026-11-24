@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 
 from ceuma.extracao.associador_espacial import (
-    _associar_rotulo_valor, _caixa, _sobreposicao_horizontal, _sobreposicao_vertical,
+    _associar_rotulo_valor, _caixa, _sobreposicao_horizontal, _sobreposicao_vertical, _unir_caixas,
 )
 from ceuma.extracao.campos import (
     _PADRAO_CPF, _classificar_numero_rg, _partes_leitura,
@@ -37,10 +37,17 @@ _OUTROS_ROTULOS = (
     "DOCUMENTO DE ORIGEM", "DOC. ORIGEM", "OBSERVACOES", "SEXO", "ENDERECO", "UF",
     "CARTEIRA DE IDENTIDADE NACIONAL", "CARTEIRA DE IDENTIDADE", "REPUBLICA FEDERATIVA DO BRASIL",
 )
+_ROTULOS_VERTICAIS_CIN = {
+    "NATURALIDADE": ("NATURALIDADE", "PLACE OF BIRTH"),
+    "LOCAL": ("LOCAL", "PLACE OF ISSUE"),
+    "SEXO": ("SEXO", "SEX"),
+}
+
+
 class PerfilDocumental:
     def __init__(self, rotulos, *, outros=(), orgaos=None, normalizar=None, validadores=None,
                  decompor=None, complementar=None, cpf_contextual=False, nao_aplicaveis=(),
-                 orgao_avulso=None, reservar=()):
+                 orgao_avulso=None, reservar=(), filiacao_ordenada=False):
         self.rotulos = rotulos
         self.campo_por_rotulo = {
             **dict.fromkeys((*_OUTROS_ROTULOS, *outros)),
@@ -60,9 +67,11 @@ class PerfilDocumental:
         self.nao_aplicaveis = frozenset(nao_aplicaveis)
         self.orgao_avulso = orgao_avulso
         self.reservar = reservar
+        self.filiacao_ordenada = filiacao_ordenada
 
 
 _UF = r"(?:AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)"
+_CIDADE = r"[A-Z][A-Z '.-]*"
 _SIGLA = r"(?:SSP|SSPDS|SSPDF|SSDS|SDS|SESP|SEJUSP|SEPOL|PC|POLITEC|IFP|IIRGD|DIC|DGPC|IGP|DETRAN|DENATRAN|SENATRAN|SJS)"
 _SIGLA_UF = re.compile(rf"({_SIGLA})(?:\s*[/.-]\s*|\s+)({_UF})")
 _DATA = r"\d{1,2}[/.-]\d{1,2}[/.-]\d{4}"
@@ -106,6 +115,12 @@ def _numero_rg(texto):
     return texto if _classificar_numero_rg(nucleo) == "RG" else None
 
 
+def _naturalidade_cin(texto):
+    if re.fullmatch(rf"{_CIDADE}\s*/\s*{_UF}", texto):
+        return texto, True
+    return None, False
+
+
 def _valor(campo, texto, perfil):
     texto = " ".join(texto.split()).strip(" :;|")
     if campo in perfil.validadores:
@@ -135,6 +150,10 @@ def _valor(campo, texto, perfil):
     elif campo in {"NATURALIDADE", "NACIONALIDADE"}:
         if re.fullmatch(r"[A-Z][A-Z '\-/.,]{2,80}", texto) and not _segmentos(texto, perfil):
             return texto, True
+    elif campo == "LOCAL" and re.fullmatch(rf"{_CIDADE}(?:\s*/\s*{_UF})?", texto):
+        return texto, True
+    elif campo == "SEXO" and re.fullmatch(r"[A-Z]", texto):
+        return texto, True
     return None, False
 
 
@@ -205,9 +224,46 @@ def _na_trajetoria(origem, destino, outra, eixo):
     return origem[3] <= outra[1] < destino[1] and _sobreposicao_horizontal(outra, destino) >= 0.20
 
 
+def _linha_seguinte_filiacao(linhas, primeiro):
+    origem = _caixa(linhas[primeiro])
+    grupo = linhas[primeiro].get("grupo_espacial")
+    proximas = []
+    for indice, linha in enumerate(linhas):
+        caixa = _caixa(linha)
+        if (caixa and linha.get("grupo_espacial") == grupo
+                and 0 <= caixa[1] - origem[3] <= 42
+                and _sobreposicao_horizontal(origem, caixa) >= 0.35):
+            proximas.append((caixa[1], indice))
+    return min(proximas)[1] if proximas else None
+
+
+def _unir_rotulos_bilingues(linhas, portugues, ingles):
+    for traducao in linhas:
+        if traducao["texto"] != ingles or not (caixa := _caixa(traducao)):
+            continue
+        pares = []
+        for linha in linhas:
+            if (linha["texto"] != portugues or not (origem := _caixa(linha))
+                    or linha.get("grupo_espacial") != traducao.get("grupo_espacial")):
+                continue
+            abaixo = 0 <= caixa[1] - origem[3] <= 24 and _sobreposicao_horizontal(origem, caixa) >= 0.35
+            ao_lado = 0 <= caixa[0] - origem[2] <= 32 and _sobreposicao_vertical(origem, caixa) >= 0.50
+            if abaixo or ao_lado:
+                pares.append((linha, origem))
+        if len(pares) == 1:
+            (linha, origem), = pares
+            linha["caixa"] = _unir_caixas(origem, caixa)
+            traducao["texto"] = ""
+
+
 def _espaciais(linhas, perfil, contexto_pessoal, adicionar, ambiguos):
     """Usa o associador comum e mantém a competição entre tipos de campo."""
     linhas = [{**linha, "texto": _normalizar(linha["texto"], perfil)} for linha in linhas]
+    verticais_cin = set()
+    for campo, (portugues, ingles) in _ROTULOS_VERTICAIS_CIN.items():
+        if ingles in perfil.rotulos.get(campo, ()):
+            verticais_cin.add(campo)
+            _unir_rotulos_bilingues(linhas, portugues, ingles)
     segmentos = [_segmentos(linha["texto"], perfil) for linha in linhas]
     for linha, partes in zip(linhas, segmentos):
         if len(partes) == 1 and not partes[0][1]:
@@ -276,6 +332,8 @@ def _espaciais(linhas, perfil, contexto_pessoal, adicionar, ambiguos):
             if tuple(caixa) in reservados or _valor(campo, candidato, perfil)[0] is None:
                 return False
             indices = etiqueta["indices"]
+            if campo in verticais_cin and eixo == "HORIZONTAL":
+                return False
             if campo == "NOME" and any(i in nomes_em_filiacao for i in indices):
                 return False
             if campo == "FILIACAO" and any(
@@ -320,7 +378,12 @@ def _espaciais(linhas, perfil, contexto_pessoal, adicionar, ambiguos):
             if campo == "FILIACAO" and selecionado["eixo"] == "VERTICAL":
                 primeiro = selecionado["id_valor"]
                 caixa_primeiro = _caixa(linhas[primeiro])
-                for i in range(primeiro + 1, len(linhas)):
+                if perfil.filiacao_ordenada:
+                    seguinte = _linha_seguinte_filiacao(linhas, primeiro)
+                    indices = () if seguinte is None else (seguinte,)
+                else:
+                    indices = range(primeiro + 1, min(primeiro + 2, len(linhas)))
+                for i in indices:
                     caixa = _caixa(linhas[i])
                     if (segmentos[i] or caixa is None
                             or linhas[i].get("grupo_espacial") != linhas[primeiro].get("grupo_espacial")):
@@ -329,7 +392,6 @@ def _espaciais(linhas, perfil, contexto_pessoal, adicionar, ambiguos):
                             and _sobreposicao_horizontal(caixa_primeiro, caixa) >= 0.35
                             and _valor(campo, linhas[i]["texto"], perfil)[0]):
                         propostas[i].append((campo, linhas[i]["texto"], False))
-                    break
             if campo in perfil.orgaos and rotulo.endswith("UF") and not _SIGLA_UF.fullmatch(achado["valor"]):
                 primeiro = selecionado["id_valor"]
                 caixa_orgao = _caixa(linhas[primeiro])
@@ -355,6 +417,7 @@ def extrair_campos_perfil(documento, perfil, rg_compartilhado=None, *, narrar=No
     candidatos = defaultdict(list)
     ambiguos = set()
     sem_validade = set()
+    pares_filiacao = set()
 
     for pagina in documento["paginas"]:
         def adicionar(campo, texto, *, titular=False):
@@ -387,6 +450,7 @@ def extrair_campos_perfil(documento, perfil, rg_compartilhado=None, *, narrar=No
             candidatos[campo].append(_registro(campo, situacao, pagina, valor))
 
         for texto, linhas in _partes_leitura(pagina):
+            inicio_filiacao = len(candidatos["FILIACAO"])
             if not linhas and not pagina.get("grupos_leitura"):
                 linhas = pagina.get("linhas") or []
             geometria = any(_caixa(linha) for linha in linhas)
@@ -403,6 +467,13 @@ def extrair_campos_perfil(documento, perfil, rg_compartilhado=None, *, narrar=No
             _textuais(texto, geometria, perfil, contexto, adicionar)
             if geometria:
                 _espaciais(linhas, perfil, contexto, adicionar, ambiguos)
+            if perfil.filiacao_ordenada:
+                nomes = tuple(dict.fromkeys(
+                    item["valor"] for item in candidatos["FILIACAO"][inicio_filiacao:]
+                    if item["status"] == "ENCONTRADO"
+                ))
+                if len(nomes) == 2:
+                    pares_filiacao.add(nomes)
             if narrar is not None:
                 for campo, valor in narrar(texto):
                     adicionar(campo, valor, titular=campo == "CPF")
@@ -440,20 +511,28 @@ def extrair_campos_perfil(documento, perfil, rg_compartilhado=None, *, narrar=No
         else:
             estado = "EVIDENCIA_INSUFICIENTE" if campo in vistos else "NAO_ENCONTRADO"
             resultado[campo] = _registro(campo, estado, vistos.get(campo))
+    if perfil.filiacao_ordenada and len(pares_filiacao) == 1 and resultado["FILIACAO"]["status"] == "ENCONTRADO":
+        nomes, = pares_filiacao
+        papeis = ("NOME_MAE", "NOME_PAI")
+        if (resultado["FILIACAO"]["valor"] == "; ".join(nomes)
+                and all(resultado[campo]["status"] == "NAO_ENCONTRADO" for campo in papeis)):
+            for campo, nome in zip(papeis, nomes):
+                resultado[campo] = {**resultado["FILIACAO"], "campo": campo, "valor": nome}
     return resultado
 
 
-# Traduções impressas junto ao rótulo. Palavras em inglês isoladas não
-# estabelecem vínculo com um valor nem mudam a classificação do documento.
+# Traduções impressas junto ao rótulo no texto da mesma linha.
 _ROTULOS_BILINGUES_CIN = re.compile(
     r"(?<!\w)(?:"
     r"(NOME)\s*/\s*(?:FULL NAME|NAME)|"
     r"(REGISTRO GERAL CPF|CPF)\s*/\s*(?:PERSONAL NUMBER|PERSONAL NO\.?)|"
     r"(DATA DE NASCIMENTO|NASCIMENTO)\s*/\s*(?:DATE OF BIRTH|BIRTH DATE)|"
-    r"(DATA DE EXPEDICAO|DATA DE EMISSAO|EXPEDICAO|EMISSAO)\s*/\s*(?:DATE OF ISSUE|ISSUE DATE)|"
+    r"(DATA DE EXPEDICAO|DATA DE EMISSAO|EXPEDICAO|EMISSAO)\s*/\s*(?:DATE OF ISSUE|ISSUE DATE|ISSUE)|"
     r"(DATA DE VALIDADE|VALIDADE)\s*/\s*(?:DATE OF EXPIRY|EXPIRY DATE|EXPIRATION DATE|EXPIRY)|"
-    r"(FILIACAO)\s*/\s*PARENTAGE|"
-    r"(NATURALIDADE)\s*/\s*PLACE OF BIRTH|"
+    r"(FILIACAO)\s*/\s*(?:PARENTAGE|FILIATION)|"
+    r"(NATURALIDADE)(?:\s*/\s*|\s+)PLACE OF BIRTH|"
+    r"(LOCAL)(?:\s*/\s*|\s+)PLACE OF ISSUE|"
+    r"(SEXO)(?:\s*/\s*|\s+)SEX|"
     r"(NACIONALIDADE)\s*/\s*NATIONALITY|"
     r"(ORGAO EMISSOR|ORGAO EXPEDIDOR)\s*/\s*(?:ISSUING AUTHORITY|CARD ISSUER|ISSUER)|"
     r"(UF DE EMISSAO|UF DE EXPEDICAO)\s*/\s*(?:STATE OF ISSUE|ISSUING STATE)"
@@ -463,21 +542,29 @@ _ROTULOS_BILINGUES_CIN = re.compile(
 
 def _normalizar_cin(texto):
     texto = _ROTULO_REGISTRO_CPF.sub("REGISTRO GERAL CPF", texto)
-    return _ROTULOS_BILINGUES_CIN.sub(lambda m: next(r for r in m.groups() if r is not None), texto)
+    texto = _ROTULOS_BILINGUES_CIN.sub(lambda m: next(r for r in m.groups() if r is not None), texto)
+    rotulo = texto.strip(" / ")
+    if any(rotulo in par for par in _ROTULOS_VERTICAIS_CIN.values()):
+        return rotulo
+    return texto
 
 
 _PERFIS_IDENTIDADE = {
     tipo: PerfilDocumental(
-        {**_ROTULOS, "CPF": tuple(r for r in _ROTULOS["CPF"] if cin or r != "REGISTRO GERAL CPF")},
+        {**_ROTULOS, "CPF": tuple(r for r in _ROTULOS["CPF"] if cin or r != "REGISTRO GERAL CPF"),
+         **({**_ROTULOS_VERTICAIS_CIN,
+             "NATURALIDADE": (*_ROTULOS["NATURALIDADE"], _ROTULOS_VERTICAIS_CIN["NATURALIDADE"][1])} if cin else {})},
         outros=("REGISTRO GERAL CPF",), orgaos={"ORGAO_EMISSOR": "UF_EMISSAO"},
         normalizar=(_normalizar_cin if cin else
                     lambda texto: _ROTULO_REGISTRO_CPF.sub("REGISTRO GERAL CPF", texto)),
+        validadores={"NATURALIDADE": _naturalidade_cin} if cin else None,
         cpf_contextual=True, nao_aplicaveis=("RG",) if cin else (),
-        orgao_avulso="ORGAO_EMISSOR",
+        orgao_avulso="ORGAO_EMISSOR", filiacao_ordenada=cin,
     )
     for tipo, cin in (("DOCUMENTO_IDENTIDADE", False), ("CIN", True))
 }
 CAMPOS_IDENTIDADE = tuple(_ROTULOS)
+CAMPOS_CIN = tuple(_PERFIS_IDENTIDADE["CIN"].rotulos)
 
 
 def extrair_identidade(documento, tipo, rg_compartilhado=None):

@@ -40,7 +40,7 @@ ORGAO EMISSOR: SSP/MA
 FILIACAO
 GENITORA FICTICIA DA SILVA
 GENITOR FICTICIO DA SILVA
-NATURALIDADE: SAO LUIS - MA
+NATURALIDADE: SAO LUIS/MA
 NACIONALIDADE: BRASILEIRA"""
 
 
@@ -72,7 +72,7 @@ NOME / NAME: PESSOA FICTICIA ALFA
 REGISTRO GERAL - CPF / PERSONAL NUMBER
 000.000.001-91
 DATA DE NASCIMENTO / DATE OF BIRTH: 14/05/2001
-NATURALIDADE / PLACE OF BIRTH: SAO LUIS - MA
+NATURALIDADE / PLACE OF BIRTH: SAO LUIS/MA
 NACIONALIDADE / NATIONALITY: BRASILEIRA"""
         verso = """DATA DE EMISSAO / DATE OF ISSUE: 17/04/2035
 VALIDADE / EXPIRY DATE: 17/04/2045
@@ -83,7 +83,7 @@ ORGAO EXPEDIDOR / CARD ISSUER: SSP/MA"""
         campos = resultado["campos"]["identidade"]
         esperados = {
             "NOME": ("PESSOA FICTICIA ALFA", 1), "CPF": (_CPF, 1),
-            "DATA_NASCIMENTO": ("14/05/2001", 1), "NATURALIDADE": ("SAO LUIS - MA", 1),
+            "DATA_NASCIMENTO": ("14/05/2001", 1), "NATURALIDADE": ("SAO LUIS/MA", 1),
             "NACIONALIDADE": ("BRASILEIRA", 1), "DATA_EXPEDICAO": ("17/04/2035", 2),
             "DATA_VALIDADE": ("17/04/2045", 2), "FILIACAO": ("PESSOA FICTICIA BETA", 2),
             "ORGAO_EMISSOR": ("SSP", 2), "UF_EMISSAO": ("MA", 2),
@@ -99,6 +99,100 @@ ORGAO EXPEDIDOR / CARD ISSUER: SSP/MA"""
             self.assertEqual(campos["CPF"]["status"], status)
             self.assertIsNone(campos["RG"]["valor"])
         self.assertEqual(analisar(titulo + "CPF / PERSONAL NUMBER: " + _CPF)["campos"]["identidade"]["CPF"]["valor"], _CPF)
+
+    def test_cin_emissao_issue_e_filiacao_em_texto(self):
+        campos = self.campos(
+            f"CARTEIRA DE IDENTIDADE NACIONAL\nREGISTRO GERAL - CPF: {_CPF}\n"
+            "Filiação / Filiation\nPRIMEIRA PESSOA FICTICIA\nSEGUNDA PESSOA FICTICIA\n"
+            "Emissão/Issue 17/04/2035\nNaturalidade / Place of birth\nSAO LUIS/MA"
+        )
+        self.assertEqual(campos["DATA_EXPEDICAO"]["valor"], "17/04/2035")
+        self.assertEqual(campos["NOME_MAE"]["valor"], "PRIMEIRA PESSOA FICTICIA")
+        self.assertEqual(campos["NOME_PAI"]["valor"], "SEGUNDA PESSOA FICTICIA")
+        self.assertEqual(campos["NATURALIDADE"]["valor"], "SAO LUIS/MA")
+
+    def test_cin_filiacao_acima_da_emissao_na_coluna_direita(self):
+        campos = self.campos(
+            f"CARTEIRA DE IDENTIDADE NACIONAL\nREGISTRO GERAL - CPF: {_CPF}",
+            [linha("Filiação / Filiation", 200, 10, 125),
+             linha("PRIMEIRA PESSOA FICTICIA", 200, 32, 185),
+             linha("ASSINATURA", 0, 52),
+             linha("SEGUNDA PESSOA FICTICIA", 200, 52, 185),
+             linha("Emissão/Issue", 260, 75, 86),
+             linha("17/04/2035", 355, 75, 70),
+             linha("Naturalidade / Place of birth", 200, 100, 190),
+             linha("SAO LUIS/MA", 200, 120, 100)],
+        )
+        esperados = {"DATA_EXPEDICAO": "17/04/2035", "NOME_MAE": "PRIMEIRA PESSOA FICTICIA",
+                     "NOME_PAI": "SEGUNDA PESSOA FICTICIA", "NATURALIDADE": "SAO LUIS/MA",
+                     "FILIACAO": "PRIMEIRA PESSOA FICTICIA; SEGUNDA PESSOA FICTICIA"}
+        for campo, valor in esperados.items():
+            self.assertEqual((campos[campo]["valor"], campos[campo]["pagina_origem"]), (valor, 2))
+
+    def test_cin_naturalidade_abaixo_de_um_ou_dos_dois_rotulos(self):
+        frente = f"CARTEIRA DE IDENTIDADE NACIONAL\nREGISTRO GERAL - CPF: {_CPF}"
+        for verso in (
+            "Naturalidade\nSão Luís/MA",
+            "Place of birth\nSão Luís/MA",
+            [linha("Naturalidade", 100, 20, 90), linha("BRASILEIRA", 200, 20, 90),
+             linha("São Luís/MA", 100, 40, 100)],
+            [linha("Place of birth", 100, 20, 90), linha("BRASILEIRA", 200, 20, 90),
+             linha("São Luís/MA", 100, 40, 100)],
+            "Naturalidade\nPlace of birth\nSão Luís/MA",
+            [linha("Naturalidade", 100, 20, 90), linha("Place of birth", 100, 35, 90),
+             linha("São Luís/MA", 100, 55, 100)],
+            [linha("Naturalidade", 100, 20, 90), linha("Place of birth", 200, 20, 90),
+             linha("BRASILEIRA", 300, 20, 90), linha("São Luís/MA", 140, 40, 100)],
+        ):
+            with self.subTest(verso=verso):
+                campo = self.campos(frente, verso)["NATURALIDADE"]
+                self.assertEqual((campo["valor"], campo["pagina_origem"]), ("SAO LUIS/MA", 2))
+
+    def test_cin_naturalidade_ignora_texto_proximo_sem_uf_valida(self):
+        frente = f"CARTEIRA DE IDENTIDADE NACIONAL\nREGISTRO GERAL - CPF: {_CPF}"
+        verso = [linha("Naturalidade / Place of Birth", 100, 20, 150),
+                 linha("ANATATIUR", 100, 36, 90), linha("ANAJATUBA/XX", 100, 38, 100)]
+        campo = self.campos(frente, verso + [linha("ANAJATUBA/MA", 100, 40, 100)])["NATURALIDADE"]
+        self.assertEqual((campo["status"], campo["valor"]), ("ENCONTRADO", "ANAJATUBA/MA"))
+        self.assertIsNone(self.campos(frente, verso)["NATURALIDADE"]["valor"])
+
+    def test_cin_local_de_emissao_e_naturalidade_sob_rotulos_distintos(self):
+        frente = f"CARTEIRA DE IDENTIDADE NACIONAL\nREGISTRO GERAL - CPF: {_CPF}"
+        for verso, local in (
+            ("Naturalidade / Place of Birth\nANAJATUBA/MA\nLocal/Place of Issue\nSÃO LUís", "SAO LUIS"),
+            ("Naturalidade\nANAJATUBA/MA\nPlace of Issue\nTeresina/PI", "TERESINA/PI"),
+            ([linha("Naturalidade / Place of birth", 0, 20, 145), linha("Local /", 175, 20, 40),
+              linha("Place of Issue", 225, 20, 80), linha("ANAJATUBA/MA", 0, 40, 95),
+              linha("SÃO LUís", 175, 40, 85), linha("Emissão/Issue", 330, 20, 90),
+              linha("17/04/2035", 330, 40, 75)], "SAO LUIS"),
+        ):
+            with self.subTest(verso=verso):
+                campos = self.campos(frente, verso)
+                for campo, valor in (("NATURALIDADE", "ANAJATUBA/MA"), ("LOCAL", local)):
+                    self.assertEqual((campos[campo]["valor"], campos[campo]["pagina_origem"]), (valor, 2))
+
+    def test_cin_local_rejeita_uf_invalida_e_valor_ao_lado_do_rotulo(self):
+        campos = self.campos([
+            linha("CARTEIRA DE IDENTIDADE NACIONAL", 0, 0, 300),
+            linha(f"REGISTRO GERAL - CPF: {_CPF}", 0, 20, 230),
+            linha("Local / Place of Issue", 0, 40, 130), linha("SAO LUIS/MA", 140, 40, 100),
+            linha("TERESINA/XX", 0, 60, 100),
+        ])
+        self.assertIsNone(campos["LOCAL"]["valor"])
+
+    def test_cin_sexo_captura_uma_letra_abaixo_do_rotulo(self):
+        frente = f"CARTEIRA DE IDENTIDADE NACIONAL\nREGISTRO GERAL - CPF: {_CPF}"
+        for verso, esperado in (
+            ("Sexo / Sex\nf", "F"),
+            ("Sexo / Sex\nFEMININO", None),
+            ([linha("Sexo /", 100, 20, 36), linha("Sex", 140, 20, 22),
+              linha("F", 170, 20, 10), linha("M", 100, 40, 10)], "M"),
+        ):
+            with self.subTest(verso=verso):
+                campo = self.campos(frente, verso)["SEXO"]
+                self.assertEqual(campo["valor"], esperado)
+                if esperado:
+                    self.assertEqual((campo["status"], campo["pagina_origem"]), ("ENCONTRADO", 2))
 
     def test_modelos_internos_sem_promover_desconhecido(self):
         rg = analisar(_RG_COMPLETO)["identificacao"]
@@ -324,19 +418,25 @@ class TestePersistenciaIdentidade(unittest.TestCase):
         return salvar_resultado_analise(self.con, self.ident, analisar(texto, nome=nome))["documento_id"]
 
     def test_persistencia_recuperacao_e_csv_sem_trechos_de_identidade(self):
-        self.salvar(_CIN_COMPLETA)
+        self.salvar(_CIN_COMPLETA + "\nLocal / Place of Issue\nTERESINA/PI\nSexo / Sex\nF")
         with self.con:
             self.con.execute("UPDATE analises SET status='CONCLUIDA' WHERE id=?", (self.ident,))
         relatorio, _ = recuperar_relatorio(self.con, self.codigo)
         registros = {item["campo"]: item for item in relatorio["campos_extraidos"]}
         self.assertNotIn("RG", registros)
         self.assertEqual(registros["CPF"]["status"], "TITULAR_CONFIRMADO")
+        self.assertEqual(registros["LOCAL"]["valor"], "TERESINA/PI")
+        self.assertEqual(registros["SEXO"]["valor"], "F")
+        self.assertTrue(any(item["campo"] == "LOCAL" and item["status"] == "ENCONTRADO"
+                            for item in relatorio["estados_campos"]))
         self.assertTrue(all(item["trecho_origem"] is None for item in registros.values()))
         with TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "relatorio.csv"
             exportar_relatorio_csv(relatorio, arquivo)
             with arquivo.open(encoding="utf-8-sig", newline="") as f:
-                self.assertTrue(any("ORGAO_EMISSOR" in linha for linha in csv.reader(f, delimiter=";")))
+                linhas = list(csv.reader(f, delimiter=";"))
+                self.assertTrue(any("ORGAO_EMISSOR" in linha for linha in linhas))
+                self.assertTrue(any("LOCAL" in linha and "TERESINA/PI" in linha for linha in linhas))
 
     def test_persistencia_de_ambiguidade_sem_valores_nem_identificadores_de_controle(self):
         self.salvar(
